@@ -1,0 +1,71 @@
+name: みんレポ自動スクレイピング
+
+on:
+  schedule:
+    # 毎日午前9時JST（UTC 0時）- 通常取得
+    - cron: '0 0 * * *'
+    # 毎日午後2時JST（UTC 5時）- 欠損チェック＆補完
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '実行モード'
+        required: false
+        default: 'normal'
+        type: choice
+        options:
+          - normal
+          - backfill
+      target_date:
+        description: '取得対象日付 (例: 2026-04-01) 空白なら昨日'
+        required: false
+        default: ''
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Pythonセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: ライブラリインストール
+        run: |
+          pip install playwright gspread google-auth
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: スクレイピング実行
+        env:
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: |
+          # スケジュール実行の場合
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            # UTC 5時（JST14時）は欠損補完モード
+            HOUR=$(date -u +%H)
+            if [ "$HOUR" = "05" ]; then
+              echo "欠損補完モードで実行"
+              python scraper_actions.py backfill
+            else
+              echo "通常モードで実行"
+              python scraper_actions.py
+            fi
+          # 手動実行の場合
+          else
+            MODE="${{ github.event.inputs.mode }}"
+            TARGET="${{ github.event.inputs.target_date }}"
+            if [ "$MODE" = "backfill" ]; then
+              python scraper_actions.py backfill
+            elif [ -n "$TARGET" ]; then
+              python scraper_actions.py "$TARGET"
+            else
+              python scraper_actions.py
+            fi
+          fi
