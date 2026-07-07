@@ -63,20 +63,72 @@ def scrape_and_save(target_date=None):
             locale="ja-JP"
         )
 
-        # ① タグページ→最新レポートURL取得
+        # ① タグページ→レポート一覧から対象日付のリンクを選ぶ
+        # ※美原は毎日掲載ではないため、リンクテキストの日付（例: 7/5(日)）を解析して選択する
         print(f"タグページアクセス中...")
         page.goto(TAG_URL, wait_until="domcontentloaded", timeout=90000)
         time.sleep(5)
 
-        link = page.query_selector("div.table_wrap a")
-        if not link:
+        links = page.query_selector_all("div.table_wrap a")
+        if not links:
             print("❌ レポートリンクが見つかりません")
             browser.close()
             return False
 
-        report_url = link.get_attribute("href")
-        if report_url.startswith("/"):
-            report_url = "https://min-repo.com" + report_url
+        reports = []  # [(date_str, url)]
+        for l in links:
+            text = (l.inner_text() or "").strip()
+            m = re.search(r"(?:(\d{4})/)?(\d{1,2})/(\d{1,2})\s*\(", text)
+            if not m:
+                continue
+            yy = int(m.group(1)) if m.group(1) else jst.year
+            mm, dd = int(m.group(2)), int(m.group(3))
+            try:
+                d = datetime(yy, mm, dd)
+            except ValueError:
+                continue
+            # 年表記なしで未来日付になる場合は前年（年跨ぎ対応）
+            if not m.group(1) and d > jst + timedelta(days=2):
+                d = datetime(yy - 1, mm, dd)
+            href = l.get_attribute("href") or ""
+            if href.startswith("/"):
+                href = "https://min-repo.com" + href
+            if href:
+                reports.append((d.strftime("%Y-%m-%d"), href))
+
+        if not reports:
+            print("❌ 日付付きレポートが見つかりません")
+            browser.close()
+            return False
+
+        print(f"掲載レポート（新しい順）: {[r[0] for r in reports[:6]]}")
+
+        if target_date:
+            hit = [r for r in reports if r[0] == date_str]
+            if not hit:
+                print(f"⏭ {date_str} のレポートは掲載されていません（美原は毎日掲載ではありません）")
+                browser.close()
+                return False
+            report_url = hit[0][1]
+        else:
+            # 最新レポートの実際の日付を採用（「昨日」とは限らない）
+            date_str = reports[0][0]
+            date_disp = datetime.strptime(date_str, "%Y-%m-%d").strftime("%Y/%m/%d")
+            report_url = reports[0][1]
+            print(f"最新レポート日付: {date_str}")
+
+        # 既に取得済み（データ入り）ならスキップ
+        try:
+            existing_titles = [ws.title for ws in spreadsheet.worksheets()]
+            if date_str in existing_titles:
+                ws0 = spreadsheet.worksheet(date_str)
+                if len(ws0.get_all_values()) >= 2:
+                    print(f"✅ {date_str} は取得済みのためスキップ")
+                    browser.close()
+                    return True
+        except Exception:
+            pass
+
         print(f"レポートURL: {report_url}")
 
         # ② 全機種ページ
@@ -280,25 +332,59 @@ def scrape_and_save(target_date=None):
     return True
 
 
-def check_missing_dates(spreadsheet, days_back=7):
-    """過去N日分でデータが欠けている日付を返す"""
+def get_recent_report_dates(max_n=8):
+    """タグページから最近の掲載レポート日付リストを取得（新しい順）"""
+    dates = []
     jst = datetime.utcnow() + timedelta(hours=9)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+        )
+        page = browser.new_page(
+            user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+            locale="ja-JP"
+        )
+        try:
+            page.goto(TAG_URL, wait_until="domcontentloaded", timeout=90000)
+            time.sleep(5)
+            links = page.query_selector_all("div.table_wrap a")
+            for l in links:
+                text = (l.inner_text() or "").strip()
+                m = re.search(r"(?:(\d{4})/)?(\d{1,2})/(\d{1,2})\s*\(", text)
+                if not m:
+                    continue
+                yy = int(m.group(1)) if m.group(1) else jst.year
+                mm, dd = int(m.group(2)), int(m.group(3))
+                try:
+                    d = datetime(yy, mm, dd)
+                except ValueError:
+                    continue
+                if not m.group(1) and d > jst + timedelta(days=2):
+                    d = datetime(yy - 1, mm, dd)
+                ds = d.strftime("%Y-%m-%d")
+                if ds not in dates:
+                    dates.append(ds)
+                if len(dates) >= max_n:
+                    break
+        except Exception as e:
+            print(f"レポート一覧取得エラー: {e}")
+        finally:
+            browser.close()
+    return dates
+
+
+def get_existing_dates(spreadsheet):
+    """データが入っている日付シートの一覧"""
     existing = set()
     for ws in spreadsheet.worksheets():
         if re.match(r"\d{4}-\d{2}-\d{2}", ws.title):
-            # データが実際に入っているか確認（2行以上=ヘッダー+データ）
             try:
-                if ws.row_count >= 2 and len(ws.get_all_values()) >= 2:
+                if len(ws.get_all_values()) >= 2:
                     existing.add(ws.title)
-            except:
+            except Exception:
                 pass
-
-    missing = []
-    for i in range(1, days_back + 1):
-        d = (jst - timedelta(days=i)).strftime("%Y-%m-%d")
-        if d not in existing:
-            missing.append(d)
-    return missing
+    return existing
 
 
 def scrape_with_retry(target_date=None, max_retries=3):
@@ -314,7 +400,7 @@ def scrape_with_retry(target_date=None, max_retries=3):
             print(f"⚠️ 試行{attempt}エラー: {e}")
 
         if attempt < max_retries:
-            wait = 30 * attempt  # 30秒、60秒待ってリトライ
+            wait = 30 * attempt
             print(f"{wait}秒待機してリトライ...")
             time.sleep(wait)
 
@@ -322,52 +408,48 @@ def scrape_with_retry(target_date=None, max_retries=3):
     return False
 
 
+def backfill_recent(spreadsheet, max_reports=8):
+    """掲載済みレポートのうち未取得のものを補完"""
+    report_dates = get_recent_report_dates(max_n=max_reports)
+    print(f"掲載レポート日付: {report_dates}")
+    if not report_dates:
+        print("レポート一覧が取得できませんでした")
+        return 0
+    existing = get_existing_dates(spreadsheet)
+    missing = [d for d in report_dates if d not in existing]
+    print(f"未取得: {missing}")
+    if not missing:
+        print("✅ 掲載済みレポートはすべて取得済みです")
+        return 0
+    success = 0
+    for d in missing:
+        print(f"\n--- {d} を取得 ---")
+        if scrape_with_retry(target_date=d, max_retries=2):
+            success += 1
+        time.sleep(5)
+    print(f"\n補完完了: {success}/{len(missing)}件")
+    return success
+
+
 if __name__ == "__main__":
     import sys
 
-    # モード判定
     mode = sys.argv[1] if len(sys.argv) > 1 else "normal"
-
     spreadsheet = connect_sheets()
 
     if mode == "backfill":
-        # 欠損補完モード：過去7日分の欠けている日を全部取得
+        # 欠損補完モード：掲載済みレポートのうち未取得を取得
         print("=== 欠損補完モード ===")
-        missing = check_missing_dates(spreadsheet, days_back=7)
-        print(f"欠損日付: {missing}")
-
-        if not missing:
-            print("✅ 欠損なし。全日程のデータが揃っています。")
-            exit(0)
-
-        success_count = 0
-        for date_str in missing:
-            print(f"\n--- {date_str} を取得 ---")
-            if scrape_with_retry(target_date=date_str, max_retries=2):
-                success_count += 1
-                time.sleep(5)  # 連続取得の間隔
-
-        print(f"\n補完完了: {success_count}/{len(missing)}日分を取得")
-        exit(0 if success_count > 0 else 1)
-
+        backfill_recent(spreadsheet, max_reports=8)
+        exit(0)
     else:
-        # 通常モード：昨日または指定日を取得（リトライ付き）
+        # 通常モード：最新レポート取得 → 未取得レポートを補完
         target = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] != "normal" else None
         if target:
             print(f"日付指定: {target}")
-        ok = scrape_with_retry(target_date=target, max_retries=3)
-
-        # 通常取得後、欠損チェックして自動補完
-        if ok:
-            print("\n=== 欠損自動チェック ===")
-            missing = check_missing_dates(spreadsheet, days_back=7)
-            if missing:
-                print(f"欠損日付を発見: {missing} → 自動補完します")
-                for date_str in missing:
-                    print(f"--- {date_str} を補完 ---")
-                    scrape_with_retry(target_date=date_str, max_retries=2)
-                    time.sleep(5)
-            else:
-                print("欠損なし")
-
+            ok = scrape_with_retry(target_date=target, max_retries=3)
+        else:
+            ok = scrape_with_retry(target_date=None, max_retries=3)
+            print("\n=== 未取得レポートの自動チェック ===")
+            backfill_recent(spreadsheet, max_reports=6)
         exit(0 if ok else 1)
