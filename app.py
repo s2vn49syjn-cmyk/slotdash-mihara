@@ -18,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-SPREADSHEET_ID = "ここに美原用スプレッドシートIDを貼る"
+SPREADSHEET_ID = "1Q0JDxFavUDeLtyrd0pCkpiYslR2eMlL1Gozi9r2kuUc"
 JUGGLER_KEYWORDS = ["ジャグラー", "juggler", "JUGGLER"]
 
 # ─────────────────────────────────────────────
