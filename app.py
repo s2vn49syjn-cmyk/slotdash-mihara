@@ -18,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-SPREADSHEET_ID = "1Q0JDxFavUDeLtyrd0pCkpiYslR2eMlL1Gozi9r2kuUc"
+SPREADSHEET_ID = "ここに美原用スプレッドシートIDを貼る"
 JUGGLER_KEYWORDS = ["ジャグラー", "juggler", "JUGGLER"]
 
 # ─────────────────────────────────────────────
@@ -377,8 +377,8 @@ def generate_island_image(diff_map_tuple, machine_map_tuple=(), date_key="", as_
     draw = ImageDraw.Draw(bg)
 
     # フォント（日本語対応 - 複数パスを試行）
-    FONT_SIZE = 17
-    FONT_SM = 13
+    FONT_SIZE = 12
+    FONT_SM = 9
     JP_FONT_PATHS = [
         "/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf",
         "/usr/share/fonts/opentype/ipaexfont-gothic/ipaexg.ttf",
@@ -422,8 +422,8 @@ def generate_island_image(diff_map_tuple, machine_map_tuple=(), date_key="", as_
         if diff < 0: return (220, 0, 0)
         return (200, 200, 200)
 
-    BW = 56
-    BH = 20
+    BW = 43
+    BH = 15
 
     for num, (rx, ry) in PDF_POSITIONS.items():
         diff = diff_map.get(num)
@@ -439,13 +439,13 @@ def generate_island_image(diff_map_tuple, machine_map_tuple=(), date_key="", as_
         outline_c = get_outline_color(diff)
 
         # 差枚バッジ（台番の上にずらして台番が見えるように）
-        SHIFT = 18  # 上にずらすピクセル数
+        SHIFT = 13  # 上にずらすピクセル数
         x0, y0 = px - BW//2, py - BH//2 - SHIFT
         x1, y1 = px + BW//2, py + BH//2 - SHIFT
         draw.rectangle([x0, y0, x1, y1], fill=color)
         draw.rectangle([x0, y0, x1, y1], outline=outline_c, width=1)
 
-        text = f"+{int(diff):,}" if diff > 0 else ("0" if diff == 0 else f"{int(diff):,}")
+        text = f"+{int(diff)}" if diff > 0 else ("0" if diff == 0 else f"{int(diff)}")
         text_color = get_text_color(diff)
         try:
             bbox = draw.textbbox((0, 0), text, font=font)
@@ -466,7 +466,7 @@ def generate_island_image(diff_map_tuple, machine_map_tuple=(), date_key="", as_
             except:
                 mw, mh = len(short) * 7, FONT_SM
             mx0 = px - mw//2 - 1
-            my0 = py + BH//2 + 2
+            my0 = py + BH//2 + 1
             mx1 = px + mw//2 + 1
             my1 = my0 + mh + 2
             draw.rectangle([mx0, my0, mx1, my1], fill=(255, 255, 255))
