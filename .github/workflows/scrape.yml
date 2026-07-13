@@ -3,9 +3,9 @@ name: みんレポ自動スクレイピング
 on:
   schedule:
     # 毎日午前9時JST（UTC 0時）- 通常取得
-    - cron: '0 0 * * *'
+    - cron: '17 22 * * *'
     # 毎日午後2時JST（UTC 5時）- 欠損チェック＆補完
-    - cron: '0 5 * * *'
+    - cron: '17 5 * * *'
   workflow_dispatch:
     inputs:
       mode:
