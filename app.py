@@ -18,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-SPREADSHEET_ID = "ここに美原用スプレッドシートIDを貼る"
+SPREADSHEET_ID = "1Q0JDxFavUDeLtyrd0pCkpiYslR2eMlL1Gozi9r2kuUc"
 JUGGLER_KEYWORDS = ["ジャグラー", "juggler", "JUGGLER"]
 
 # ─────────────────────────────────────────────
@@ -1880,6 +1880,27 @@ with tab_dash:
                 st.info("履歴データが不足しています")
         else:
             st.info("3日分の履歴が必要です")
+
+        # ── マイナス差枚ランキング ──
+        st.markdown('<div class="sec-title">❄️ マイナス差枚ランキング</div>', unsafe_allow_html=True)
+        if summary_df.empty:
+            st.info("履歴データが不足しています")
+        else:
+            minus_tabs = st.tabs(["📉 直近3日", "📉 直近7日"])
+            for col_name, mtab in [("直近3日合計", minus_tabs[0]), ("直近7日合計", minus_tabs[1])]:
+                with mtab:
+                    mdf = summary_df[summary_df[col_name] < 0].sort_values(col_name).head(30).copy()
+                    if mdf.empty:
+                        st.info("マイナス台なし")
+                    else:
+                        st.markdown(f'<div style="font-size:0.68rem;color:#94a3b8;margin-bottom:6px;">{col_name}が深い順 TOP30</div>', unsafe_allow_html=True)
+                        disp_m = pd.DataFrame({
+                            "台番": mdf["台番"].astype(int),
+                            "機種": mdf["機種名"].apply(shorten_name),
+                            "合計": mdf[col_name].apply(diff_sign),
+                            "前日": mdf["前日差枚"].apply(diff_sign),
+                        })
+                        st.dataframe(disp_m, hide_index=True, use_container_width=True, height=400)
 
         # ── おすすめ台 ──
         st.markdown('<div class="sec-title">⭐ おすすめ台</div>', unsafe_allow_html=True)
