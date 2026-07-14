@@ -18,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-SPREADSHEET_ID = "1Q0JDxFavUDeLtyrd0pCkpiYslR2eMlL1Gozi9r2kuUc"
+SPREADSHEET_ID = "ここに美原用スプレッドシートIDを貼る"
 JUGGLER_KEYWORDS = ["ジャグラー", "juggler", "JUGGLER"]
 
 # ─────────────────────────────────────────────
@@ -363,7 +363,7 @@ def _load_bg_image():
     return Image.open(io.BytesIO(img_data)).convert("RGB")
 
 @st.cache_data(show_spinner=False)
-def generate_island_image(diff_map_tuple, machine_map_tuple=(), date_key="", as_pdf=False):
+def generate_island_image(diff_map_tuple, machine_map_tuple=(), date_key="", as_pdf=False, mode="diff"):
     """PILで高速に差枚+機種名オーバーレイ画像を生成（キャッシュ付き）"""
     from PIL import Image, ImageDraw, ImageFont
     import io
@@ -422,6 +422,25 @@ def generate_island_image(diff_map_tuple, machine_map_tuple=(), date_key="", as_
         if diff < 0: return (220, 0, 0)
         return (200, 200, 200)
 
+    # 回転数モード用のカラー
+    def get_color_rot(v):
+        if v >= 8000: return (139, 0, 0)      # 激熱
+        if v >= 7000: return (204, 0, 0)
+        if v >= 6000: return (230, 120, 0)
+        if v >= 5000: return (80, 160, 60)
+        if v >= 4000: return (180, 180, 0)
+        if v >= 2000: return (100, 180, 220)
+        return (238, 238, 238)                 # 低回転
+
+    def get_text_color_rot(v):
+        if v >= 5000: return (255, 255, 255)
+        return (40, 40, 40)
+
+    if mode == "rot":
+        get_color = get_color_rot
+        get_text_color = get_text_color_rot
+        get_outline_color = lambda v: (150, 150, 150)
+
     BW = 43
     BH = 15
 
@@ -445,7 +464,10 @@ def generate_island_image(diff_map_tuple, machine_map_tuple=(), date_key="", as_
         draw.rectangle([x0, y0, x1, y1], fill=color)
         draw.rectangle([x0, y0, x1, y1], outline=outline_c, width=1)
 
-        text = f"+{int(diff)}" if diff > 0 else ("0" if diff == 0 else f"{int(diff)}")
+        if mode == "rot":
+            text = f"{int(diff)}"
+        else:
+            text = f"+{int(diff)}" if diff > 0 else ("0" if diff == 0 else f"{int(diff)}")
         text_color = get_text_color(diff)
         try:
             bbox = draw.textbbox((0, 0), text, font=font)
@@ -2108,15 +2130,25 @@ with tab_island:
             if st.button("直近7日", use_container_width=True, key="ip7"): st.session_state.ip = "直近7日"
         st.markdown(f'<div style="font-size:0.68rem;color:#3b82f6;margin-bottom:10px;">表示期間: {st.session_state.ip}</div>', unsafe_allow_html=True)
 
-        # 差枚オーバーライド計算
+        # 表示データ切替（差枚 / 回転数）
+        dtype = st.radio("表示データ", ["💰 差枚", "🔄 回転数"], horizontal=True, key="island_dtype")
+        is_rot = "回転数" in dtype
+
+        # オーバーライド計算（差枚=期間合計 / 回転数=期間平均）
         diff_override = None
-        if st.session_state.ip != "前日" and history:
-            days = 3 if st.session_state.ip == "直近3日" else 7
+        if history and (st.session_state.ip != "前日" or is_rot):
+            days = 1 if st.session_state.ip == "前日" else (3 if st.session_state.ip == "直近3日" else 7)
+            vkey = "rot" if is_rot else "diff"
             diff_override = {}
             for num, ddict in history.items():
                 ds = sorted(ddict.keys())[-days:]
-                vals = [ddict[d]["diff"] for d in ds if not np.isnan(ddict[d]["diff"])]
-                if vals: diff_override[num] = sum(vals)
+                vals = []
+                for d in ds:
+                    v = ddict[d].get(vkey, np.nan) if isinstance(ddict[d], dict) else np.nan
+                    if not (isinstance(v, float) and np.isnan(v)):
+                        vals.append(v)
+                if vals:
+                    diff_override[num] = (sum(vals) / len(vals)) if is_rot else sum(vals)
 
         # ダウンロードボタン
         st.markdown('<div style="font-size:0.8rem;color:#06b6d4;margin-bottom:8px;">📥 島図画像をダウンロード</div>', unsafe_allow_html=True)
@@ -2138,12 +2170,14 @@ with tab_island:
                     as_pdf = "PDF" in out_fmt
                     img_bytes = generate_island_image(
                         dm_tuple, mm_tuple,
-                        date_key=f"{today_date}_{st.session_state.ip}_{out_fmt}",
-                        as_pdf=as_pdf
+                        date_key=f"{today_date}_{st.session_state.ip}_{out_fmt}_{dtype}",
+                        as_pdf=as_pdf,
+                        mode=("rot" if is_rot else "diff")
                     )
                     ext = "pdf" if as_pdf else "png"
                     mime = "application/pdf" if as_pdf else "image/png"
-                    fname = f"島図_{today_date}_{st.session_state.ip}.{ext}"
+                    label = "回転数" if is_rot else "差枚"
+                    fname = f"島図_{label}_{today_date}_{st.session_state.ip}.{ext}"
                     st.download_button(
                         label=f"📥 {fname} をダウンロード",
                         data=img_bytes,
@@ -2159,17 +2193,28 @@ with tab_island:
         # 凡例
         st.markdown("<hr>", unsafe_allow_html=True)
         st.markdown('<div style="font-size:0.72rem;color:#94a3b8;margin-bottom:6px;">カラー凡例</div>', unsafe_allow_html=True)
-        st.markdown("""<div style="display:flex;gap:4px;flex-wrap:wrap;font-size:0.65rem;">
-          <span style="background:#fff;color:#ef4444;border:1.5px solid #ef4444;padding:2px 6px;border-radius:3px;font-weight:bold;">マイナス</span>
-          <span style="background:#f0f0f0;color:#999;border:1px solid #ccc;padding:2px 6px;border-radius:3px;">0</span>
-          <span style="background:#64b4dc;color:#fff;padding:2px 6px;border-radius:3px;">+1〜</span>
-          <span style="background:#b4b400;color:#fff;padding:2px 6px;border-radius:3px;">+1000〜</span>
-          <span style="background:#50a03c;color:#fff;padding:2px 6px;border-radius:3px;">+2000〜</span>
-          <span style="background:#b432b4;color:#fff;padding:2px 6px;border-radius:3px;">+3000〜</span>
-          <span style="background:#cc0000;color:#fff;padding:2px 6px;border-radius:3px;">+4000〜</span>
-          <span style="background:#8b0000;color:#fff;padding:2px 6px;border-radius:3px;">+5000〜</span>
-          <span style="background:#111;color:#ff4444;padding:2px 6px;border-radius:3px;">+10000↑</span>
-        </div>""", unsafe_allow_html=True)
+        if is_rot:
+            st.markdown("""<div style="display:flex;gap:4px;flex-wrap:wrap;font-size:0.65rem;">
+              <span style="background:#eee;color:#666;border:1px solid #ccc;padding:2px 6px;border-radius:3px;">〜2000G</span>
+              <span style="background:#64b4dc;color:#333;padding:2px 6px;border-radius:3px;">2000〜</span>
+              <span style="background:#b4b400;color:#333;padding:2px 6px;border-radius:3px;">4000〜</span>
+              <span style="background:#50a03c;color:#fff;padding:2px 6px;border-radius:3px;">5000〜</span>
+              <span style="background:#e67800;color:#fff;padding:2px 6px;border-radius:3px;">6000〜</span>
+              <span style="background:#cc0000;color:#fff;padding:2px 6px;border-radius:3px;">7000〜</span>
+              <span style="background:#8b0000;color:#fff;padding:2px 6px;border-radius:3px;">8000G↑</span>
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.markdown("""<div style="display:flex;gap:4px;flex-wrap:wrap;font-size:0.65rem;">
+              <span style="background:#fff;color:#ef4444;border:1.5px solid #ef4444;padding:2px 6px;border-radius:3px;font-weight:bold;">マイナス</span>
+              <span style="background:#f0f0f0;color:#999;border:1px solid #ccc;padding:2px 6px;border-radius:3px;">0</span>
+              <span style="background:#64b4dc;color:#fff;padding:2px 6px;border-radius:3px;">+1〜</span>
+              <span style="background:#b4b400;color:#fff;padding:2px 6px;border-radius:3px;">+1000〜</span>
+              <span style="background:#50a03c;color:#fff;padding:2px 6px;border-radius:3px;">+2000〜</span>
+              <span style="background:#b432b4;color:#fff;padding:2px 6px;border-radius:3px;">+3000〜</span>
+              <span style="background:#cc0000;color:#fff;padding:2px 6px;border-radius:3px;">+4000〜</span>
+              <span style="background:#8b0000;color:#fff;padding:2px 6px;border-radius:3px;">+5000〜</span>
+              <span style="background:#111;color:#ff4444;padding:2px 6px;border-radius:3px;">+10000↑</span>
+            </div>""", unsafe_allow_html=True)
 
 with tab_all:
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
