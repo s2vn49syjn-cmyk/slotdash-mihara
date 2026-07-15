@@ -1,5 +1,5 @@
 """
-scraper_actions.py - スーパーコスモ堺 みんレポスクレイパー
+scraper_actions.py - HYPER ARROW美原 みんレポスクレイパー
 Playwright使用でJS描画後のデータ（マイナス差枚含む）を取得
 Google Sheetsに日付別シートで蓄積保存
 """
@@ -69,9 +69,38 @@ def scrape_and_save(target_date=None):
         page.goto(TAG_URL, wait_until="domcontentloaded", timeout=90000)
         time.sleep(5)
 
-        links = page.query_selector_all("div.table_wrap a")
+        # JS遅延読み込みに備えて待機
+        try:
+            page.wait_for_selector("div.table_wrap a", timeout=20000)
+        except Exception:
+            pass
+
+        # 複数セレクタでリンクを探す（サイト構造変更に対応）
+        links = []
+        for sel in ["div.table_wrap a", "table a", "article a", "main a", "a"]:
+            found = page.query_selector_all(sel)
+            # 日付らしきテキストを含むリンクだけに絞る
+            cand = []
+            for l in found:
+                t = (l.inner_text() or "").strip()
+                if re.search(r"\d{1,2}/\d{1,2}\s*\(", t):
+                    cand.append(l)
+            if cand:
+                links = cand
+                if sel != "div.table_wrap a":
+                    print(f"⚠️ セレクタ変更を検知: {sel} で{len(cand)}件取得")
+                break
+
         if not links:
-            print("❌ レポートリンクが見つかりません")
+            # 診断情報を出力
+            try:
+                title = page.title()
+                body_text = (page.inner_text("body") or "")[:300]
+                print(f"❌ レポートリンクが見つかりません")
+                print(f"[診断] ページタイトル: {title}")
+                print(f"[診断] 本文冒頭: {body_text}")
+            except Exception as de:
+                print(f"❌ レポートリンクが見つかりません（診断も失敗: {de}）")
             browser.close()
             return False
 
@@ -374,16 +403,21 @@ def get_recent_report_dates(max_n=8):
     return dates
 
 
-def get_existing_dates(spreadsheet):
-    """データが入っている日付シートの一覧"""
+def get_existing_dates(spreadsheet, only_dates=None):
+    """データが入っている日付シートの一覧（only_dates指定時はその日付だけ確認しquota節約）"""
     existing = set()
     for ws in spreadsheet.worksheets():
-        if re.match(r"\d{4}-\d{2}-\d{2}", ws.title):
-            try:
-                if len(ws.get_all_values()) >= 2:
-                    existing.add(ws.title)
-            except Exception:
-                pass
+        title = ws.title
+        if not re.match(r"\d{4}-\d{2}-\d{2}", title):
+            continue
+        if only_dates is not None and title not in only_dates:
+            continue
+        try:
+            if len(ws.get_all_values()) >= 2:
+                existing.add(title)
+            time.sleep(1)  # API制限対策
+        except Exception:
+            pass
     return existing
 
 
@@ -415,7 +449,7 @@ def backfill_recent(spreadsheet, max_reports=8):
     if not report_dates:
         print("レポート一覧が取得できませんでした")
         return 0
-    existing = get_existing_dates(spreadsheet)
+    existing = get_existing_dates(spreadsheet, only_dates=set(report_dates))
     missing = [d for d in report_dates if d not in existing]
     print(f"未取得: {missing}")
     if not missing:
