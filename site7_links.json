@@ -1,0 +1,172 @@
+{
+  "store_name": "HYPER ARROW美原店",
+  "pmc": "27090025",
+  "base_url": "https://m.site777.jp/f/D3000.do",
+  "machines": [
+    {
+      "name": "L東京喰種",
+      "params": {
+        "pmc": "27090025",
+        "mdc": "120279",
+        "urt": "2173",
+        "gc": "2",
+        "dsgk": "0",
+        "dtdd": "0"
+      },
+      "example_seat": 821,
+      "example_url": "https://m.site777.jp/f/D3000.do?pmc=27090025&mdc=120279&urt=2173&gc=2&dsgk=0&dtdd=0&dn=821",
+      "source": "user_provided",
+      "same_machine_seat_change_verified": false
+    },
+    {
+      "name": "スマスロ ミリオンゴッド-神々の軌跡-",
+      "params": {
+        "pmc": "27090025",
+        "mdc": "120358",
+        "urt": "2173",
+        "gc": "2",
+        "dsgk": "0",
+        "dtdd": "0"
+      },
+      "example_seat": 1009,
+      "example_url": "https://m.site777.jp/f/D3000.do?pmc=27090025&mdc=120358&urt=2173&gc=2&dsgk=0&dtdd=0&dn=1009",
+      "source": "user_provided",
+      "same_machine_seat_change_verified": false
+    },
+    {
+      "name": "L戦国乙女5 業火を穿つ宿焔の双刃",
+      "params": {
+        "pmc": "27090025",
+        "mdc": "120373",
+        "urt": "2173",
+        "gc": "2",
+        "dsgk": "0",
+        "dtdd": "0"
+      },
+      "example_seat": 561,
+      "example_url": "https://m.site777.jp/f/D3000.do?pmc=27090025&mdc=120373&urt=2173&gc=2&dsgk=0&dtdd=0&dn=561",
+      "source": "user_provided",
+      "same_machine_seat_change_verified": false
+    },
+    {
+      "name": "スマスロ 甲鉄城のカバネリ 海門決戦",
+      "params": {
+        "pmc": "27090025",
+        "mdc": "120354",
+        "urt": "2173",
+        "gc": "2",
+        "dsgk": "0",
+        "dtdd": "0"
+      },
+      "example_seat": 581,
+      "example_url": "https://m.site777.jp/f/D3000.do?pmc=27090025&mdc=120354&urt=2173&gc=2&dsgk=0&dtdd=0&dn=581",
+      "source": "user_provided",
+      "same_machine_seat_change_verified": false
+    },
+    {
+      "name": "ファンキージャグラー２ＫＴ",
+      "params": {
+        "pmc": "27090025",
+        "mdc": "119996",
+        "urt": "2173",
+        "gc": "2",
+        "dsgk": "0",
+        "dtdd": "0"
+      },
+      "example_seat": 965,
+      "example_url": "https://m.site777.jp/f/D3000.do?pmc=27090025&mdc=119996&urt=2173&gc=2&dsgk=0&dtdd=0&dn=965",
+      "source": "user_provided",
+      "same_machine_seat_change_verified": false
+    },
+    {
+      "name": "ネオアイムジャグラーEX",
+      "params": {
+        "pmc": "27090025",
+        "mdc": "120312",
+        "urt": "2173",
+        "gc": "2",
+        "dsgk": "0",
+        "dtdd": "0"
+      },
+      "example_seat": 929,
+      "example_url": "https://m.site777.jp/f/D3000.do?pmc=27090025&mdc=120312&urt=2173&gc=2&dsgk=0&dtdd=0&dn=929",
+      "source": "user_provided",
+      "same_machine_seat_change_verified": false
+    },
+    {
+      "name": "スマスロモンキーターンV",
+      "params": {
+        "pmc": "27090025",
+        "mdc": "120181",
+        "urt": "2173",
+        "gc": "2",
+        "dsgk": "0",
+        "dtdd": "0"
+      },
+      "example_seat": 671,
+      "example_url": "https://m.site777.jp/f/D3000.do?pmc=27090025&mdc=120181&urt=2173&gc=2&dsgk=0&dtdd=0&dn=671",
+      "source": "user_provided",
+      "same_machine_seat_change_verified": false
+    },
+    {
+      "name": "Lスマスロ北斗の拳",
+      "params": {
+        "pmc": "27090025",
+        "mdc": "120122",
+        "urt": "2173",
+        "gc": "2",
+        "dsgk": "0",
+        "dtdd": "0"
+      },
+      "example_seat": 641,
+      "example_url": "https://m.site777.jp/f/D3000.do?pmc=27090025&mdc=120122&urt=2173&gc=2&dsgk=0&dtdd=0&dn=641",
+      "source": "user_provided",
+      "same_machine_seat_change_verified": false
+    },
+    {
+      "name": "Lパチスロ炎炎ノ消防隊2",
+      "params": {
+        "pmc": "27090025",
+        "mdc": "120349",
+        "urt": "2173",
+        "gc": "2",
+        "dsgk": "0",
+        "dtdd": "0"
+      },
+      "example_seat": 781,
+      "example_url": "https://m.site777.jp/f/D3000.do?pmc=27090025&mdc=120349&urt=2173&gc=2&dsgk=0&dtdd=0&dn=781",
+      "source": "user_provided",
+      "same_machine_seat_change_verified": false
+    },
+    {
+      "name": "マイジャグラーV",
+      "params": {
+        "pmc": "27090025",
+        "mdc": "120010",
+        "urt": "2173",
+        "gc": "2",
+        "dsgk": "0",
+        "dtdd": "0"
+      },
+      "example_seat": 882,
+      "example_url": "https://m.site777.jp/f/D3000.do?pmc=27090025&mdc=120010&urt=2173&gc=2&dsgk=0&dtdd=0&dn=882",
+      "source": "user_provided",
+      "same_machine_seat_change_verified": true
+    },
+    {
+      "name": "スマスロ リコリス・リコイル",
+      "params": {
+        "pmc": "27090025",
+        "mdc": "120391",
+        "urt": "-1",
+        "gc": "2",
+        "dsgk": "0",
+        "dtdd": "0"
+      },
+      "example_seat": 741,
+      "example_url": "https://m.site777.jp/f/D3000.do?pmc=27090025&mdc=120391&urt=-1&gc=2&dsgk=0&dtdd=0&dn=741",
+      "source": "user_provided",
+      "same_machine_seat_change_verified": false
+    }
+  ]
+}

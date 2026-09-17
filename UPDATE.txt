@@ -1,0 +1,99 @@
+美原版・既存アプリの更新手順
+
+対象：https://github.com/s2vn49syjn-cmyk/slotdash-mihara
+確認した元コード：e9077e23d0de6c91d912107a142e5cf45df2921d
+
+今回はこちらの mihara-update.zip を使ってください。
+先に渡した slotdash-mihara.zip は新規作成用です。
+
+【1】ZIPを解凍
+WindowsでZIPを右クリック →「すべて展開」。
+中の mihara-update フォルダを開きます。
+
+【2】既存のGitHubにアップロード
+上のGitHubを開き、Add file → Upload files。
+mihara-updateフォルダの「中身」をすべてドラッグします。
+フォルダ自体やZIPそのものではありません。
+app.py、requirements.txtは上書き、ほかは追加になります。
+assetsフォルダの中には日本語フォントがあるので一緒にアップロードしてください。
+Commit changesで保存します。
+
+【3】配色設定
+.streamlit/config.tomlも同梱しています。
+PC上で見えない場合は「隠しファイルを表示」を有効にします。
+GitHub上で追加できなければ、Add file → Create new fileで、
+ファイル名を .streamlit/config.toml にして次を貼って保存します。
+
+[theme]
+base = "dark"
+primaryColor = "#4D8DFF"
+backgroundColor = "#0B1120"
+secondaryBackgroundColor = "#141E32"
+textColor = "#EDF3FF"
+font = "sans serif"
+[server]
+headless = true
+
+【4】既存のStreamlitアプリを開く
+既存アプリがこのリポジトリのmain/app.pyにつながっていれば更新が反映されます。
+反映されないときはManage appからReboot app。
+新しいアプリを作る必要はありません。
+
+既存の [gcp_service_account] 設定をそのまま読み、旧app.pyと同じ美原用の
+スプレッドシートIDを使うように合わせています。
+任意でSecretsの先頭に spreadsheet_id = "別のID" を設定すれば上書きできます。
+通常は設定の追加・変更は不要です。
+
+【5】表示の確認
+・最新の営業日と台数が出るか
+・おすすめ／3日・7日ランキングの対象日が正しいか
+・島図で台番号を検索し、機種名と数値が出るか
+・台の詳細からサイトセブンへ開けるか
+・狙い台に追加、保存して、現在のURLをブックマーク
+
+3日／7日のデータが足りない場合だけ、既存のActionsを開いて
+「みんレポ自動スクレイピング」→ Run workflow → modeをbackfillにして実行します。
+今のスクレイパーとワークフローはこの更新ZIPには入れていません。
+既存のGCP_CREDENTIALSとSPREADSHEET_IDのSecretsをそのまま使います。
+シートの既存列「取得日時、対象日付、機種名、台番、差枚、G数、出率」に対応済みです。
+
+【今回の機能】
+・おすすめ：3日とも＋1000枚以下かつ平均6000G以上
+・3日／7日マイナス差枚ランキング
+・機種タイプの切替、全台の機種名・台番検索
+・551台の島図、機種名、差枚・平均回転数、1・3・7日表示
+・おすすめと狙い台のマーク、台番で周辺拡大、PNG/PDF保存
+・狙い台の優先順・状態・メモ・保存、JSONバックアップ
+・台の詳細、日別履歴、11機種のサイトセブンリンク
+・収支タブなし
+
+【集計と保存について】
+直近3日／7日は保存済み営業日を使い、対象日を画面に表示します。
+データ欠損や機種入替のある台は期間集計から除外します。
+差枚の空欄は0にしません。重複行の数値が矛盾する場合も欠損として知らせます。
+島図は提供画像の配置で、左下40台は合意した補完配置です。
+上601→620、下600→581。実店舗で配置が変わった場合は座標の更新が必要です。
+狙い台は保存ボタンで保存。URLを知っている人は同じリストを開けます。
+同じリストを同時に編集すると最後の保存が優先されます。
+
+【引き継ぐ設定】
+・既存のGoogle Sheetsと履歴
+・Streamlitのgcp_service_account
+・GitHub ActionsのGCP_CREDENTIALSとSPREADSHEET_ID
+・既存のscraper_actions.py、.github/workflows/scrape.yml、packages.txt
+現在のワークフローの実際の実行指定は日本時間7:17と14:17です。
+コメントには9時とありますが、今回その時刻設定は変更していません。
+
+【確認できた範囲】
+公開されているコードと列構成を確認し、それに合わせた更新ファイルです。
+既存列形式の読込・集計とデモ画面の起動を検証しています。
+こちらから本番のGoogle Sheets接続や公開アプリの更新はしていません。
+Secretsの実値やStreamlit側の設定は見ていないため、更新後に上の確認をしてください。
+サイトセブンは提供されたURLでリンクを組み立てます。ログイン後の全機種の遷移は未検証です。
+
+【戻す場合】
+GitHubには更新前のapp.pyとrequirements.txtの履歴が残ります。
+更新コミットの変更を戻すか、更新前の履歴から2ファイルを戻せます。
+追加したデータ・島図用ファイルは旧app.pyからは読みません。
+
+フォント：Noto Sans JP。ライセンスはassets/OFL.txtを同梱。

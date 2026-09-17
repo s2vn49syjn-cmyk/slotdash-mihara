@@ -1,7 +1,6 @@
-streamlit
-pandas
-numpy
-plotly
-gspread
-google-auth
-pillow
+streamlit==1.55.0
+pandas>=2.2,<3
+numpy>=1.26,<3
+Pillow>=10.4,<13
+gspread>=6.1,<7
+google-auth>=2.35,<3
