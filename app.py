@@ -16,6 +16,16 @@ h1{font-size:2rem!important;letter-spacing:.08em}h2{font-size:1.35rem!important}
 [data-testid="stMetricValue"]{font-size:1.7rem}[data-testid="stMetric"]{background:#141e32;border:1px solid #28344b;border-radius:12px;padding:12px}
 [data-testid="stCaptionContainer"]{color:#aab9d2}button{min-height:42px}.tag{color:#ffcd72;font-size:.82rem}.seat{font-size:1.55rem;font-weight:750;color:#e9f1ff}.muted{color:#aab9d2;font-size:.85rem}
 @media(max-width:640px){.block-container{padding:4.5rem .8rem 4rem}h1{font-size:1.6rem!important}}
+[data-testid="stButton"] button,[data-testid="stDownloadButton"] button,[data-testid="stLinkButton"] a{transition:transform .16s ease,box-shadow .16s ease}
+@media(hover:hover){[data-testid="stButton"] button:not(:disabled):hover,[data-testid="stDownloadButton"] button:hover,[data-testid="stLinkButton"] a:hover{transform:translateY(-2px);box-shadow:0 5px 14px rgba(39,103,220,.2)}}
+[data-testid="stButton"] button:not(:disabled):active,[data-testid="stDownloadButton"] button:active{transform:scale(.97)}
+[class*="st-key-motion-card-"]{animation:sd-card-in .35s ease-out both}
+[class*="st-key-motion-card-"]:has(.sd-added-flash){animation:sd-added-glow .7s ease-out both}
+[data-testid="stToast"]{animation:sd-card-in .25s ease-out}
+.sd-added-flash{display:none}
+@keyframes sd-card-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes sd-added-glow{0%{box-shadow:0 0 0 0 rgba(244,114,182,.65);background:rgba(244,114,182,.18)}100%{box-shadow:0 0 0 10px transparent;background:transparent}}
+@media(prefers-reduced-motion:reduce){[class*="st-key-motion-card-"],[data-testid="stToast"]{animation:none!important}[data-testid="stButton"] button,[data-testid="stDownloadButton"] button,[data-testid="stLinkButton"] a{transition:none!important;transform:none!important}}
 </style>''',unsafe_allow_html=True)
 
 def config():
@@ -46,6 +56,7 @@ def add_seat(seat):
     if any(r['台番']==seat for r in st.session_state.picks):st.toast('登録済みやで');return
     if len(st.session_state.picks)>=100:st.warning('狙い台は100台までです');return
     st.session_state.picks.append({'台番':int(seat),'状態':'未確認','メモ':''});st.session_state.dirty=True;st.toast(f'{seat}番台を狙い台に追加')
+    st.session_state.motion_added=[int(seat)]
 
 
 def compass_map_html(image_bytes):
@@ -235,13 +246,15 @@ def card_list(frame,prefix,limit=12):
         cols=st.columns(3)
         for col,(_,r) in zip(cols,chunk.iloc[start:start+3].iterrows()):
             n=int(r['台番'])
-            with col,st.container(border=True):
+            with col,st.container(border=True,key=f'motion-card-{prefix}-{n}'):
+                if n in motion_added:st.markdown('<span class="sd-added-flash" aria-hidden="true"></span>',unsafe_allow_html=True)
                 st.markdown(f'<span class="seat">{n}</span> <span class="tag">'+('★ おすすめ' if n in rec_seats else '')+'</span>',unsafe_allow_html=True)
                 st.write(r['機種名'])
                 st.caption('差枚合計  '+fmt(r['差枚合計'],True,'枚')+'  /  平均 '+fmt(r['平均回転数'],suffix='G'))
                 a,b=st.columns(2)
                 if a.button('詳細',key=f'{prefix}_detail_{n}',width='stretch'):open_detail(n)
-                if b.button('＋ 狙い台',key=f'{prefix}_add_{n}',width='stretch'):add_seat(n)
+                picked=any(item['台番']==n for item in st.session_state.picks)
+                b.button('✓ 追加済み' if picked else '＋ 狙い台',key=f'{prefix}_add_{n}',width='stretch',disabled=picked,on_click=add_seat,args=(n,))
 
 if 'pending_focus' in st.session_state:
     st.session_state.focus=st.session_state.pop('pending_focus')
@@ -249,6 +262,7 @@ if 'pending_focus' in st.session_state:
     st.session_state.screen='🗺 島図'
 
 screen=st.radio('画面',['✨ おすすめ','🎯 狙い台','🗺 島図','📋 全台'],key='screen',horizontal=True,label_visibility='collapsed')
+motion_added=set(st.session_state.pop('motion_added',[]))
 if st.session_state.dirty:st.caption('狙い台に未保存の変更があります。「狙い台」画面から保存できます。')
 
 if screen=='✨ おすすめ':
