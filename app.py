@@ -305,10 +305,10 @@ if screen=='✨ おすすめ':
 
 elif screen=='🎯 狙い台':
     st.subheader('当日の狙い台リスト')
-    st.caption('上から優先順。追加・削除・並べ替え・状態・メモの変更は自動保存します。メモは入力後にEnterか欄の外を押すと確定します。同じリストを開くには、このページのURLをブックマークしてください。')
+    st.caption('上から優先順。追加・削除・並べ替え・メモの変更は自動保存します。メモは入力後にEnterか欄の外を押すと確定します。同じリストを開くには、このページのURLをブックマークしてください。')
     st.caption('URLを知っている人はこのリストを開けます。URLの共有に注意してください。')
     with st.popover('狙い台を全削除',disabled=not st.session_state.picks):
-        st.warning(f'このリストの狙い台{len(st.session_state.picks)}台と、その状態・メモをすべて削除します。')
+        st.warning(f'このリストの狙い台{len(st.session_state.picks)}台と、そのメモをすべて削除します。')
         st.button('全削除を確定する',key='confirm_clear_picks',type='primary',on_click=clear_all_picks,disabled=not st.session_state.picks)
     if 'bulk_notice' in st.session_state:st.success(st.session_state.pop('bulk_notice'))
     with st.form('bulk_seats_form'):
@@ -331,9 +331,8 @@ elif screen=='🎯 狙い台':
         n=r['台番']
         with st.container(border=True):
             st.write(f'**{i+1}.  {n}番台　{names.get(n,"当日のデータなし")}**')
-            a,b=st.columns([1,2]);status=a.selectbox('状態',['未確認','確保','空いてない','見送り'],index=['未確認','確保','空いてない','見送り'].index(r['状態']),key=f'status_{n}')
-            memo=b.text_input('メモ',r['メモ'],key=f'note_{n}',max_chars=300)
-            if status!=r['状態'] or memo!=r['メモ']:r.update(状態=status,メモ=memo);st.session_state.dirty=True
+            memo=st.text_input('メモ',r['メモ'],key=f'note_{n}',max_chars=300)
+            if memo!=r['メモ']:r.update(メモ=memo);st.session_state.dirty=True
             c=st.columns(4)
             if c[0].button('詳細',key=f'pick_detail_{n}',width='stretch'):open_detail(n)
             if c[1].button('↑',key=f'up_{n}',disabled=i==0,width='stretch'):
