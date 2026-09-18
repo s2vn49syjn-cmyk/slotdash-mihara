@@ -1,6 +1,6 @@
 from datetime import datetime,timedelta
 from zoneinfo import ZoneInfo
-import html,json,os,re,uuid
+import html,json,os,re,uuid,unicodedata
 from pathlib import Path
 from urllib.parse import quote
 import pandas as pd
@@ -48,6 +48,22 @@ def add_seat(seat):
     st.session_state.picks.append({'台番':int(seat),'状態':'未確認','メモ':''});st.session_state.dirty=True;st.toast(f'{seat}番台を狙い台に追加')
 
 def jump_map(seat):st.session_state.pending_focus=int(seat)
+
+def parse_bulk_seats(text,valid_seats,existing_seats):
+    text=unicodedata.normalize('NFKC',text).strip()
+    tokens=[part for part in re.split(r'[\s,、，;；]+',text) if part]
+    if not tokens:raise ValueError('台番号を入力してください。')
+    requested=[]
+    for token in tokens:
+        match=re.fullmatch(r'([0-9]{1,6})(?:番台|番)?',token)
+        if not match:raise ValueError('台番号をカンマ・改行・スペースで区切って入力してください。')
+        seat=int(match.group(1))
+        if seat not in valid_seats:raise ValueError(f'{seat}番台は現在の台一覧・島図にありません。入力内容を確認してください。')
+        if seat not in requested:requested.append(seat)
+    additions=[seat for seat in requested if seat not in existing_seats]
+    if len(existing_seats)+len(additions)>100:
+        raise ValueError(f'狙い台は100台までです。あと{max(0,100-len(existing_seats))}台追加できます。')
+    return additions,len(tokens)-len(additions)
 
 def recommendations_for_rules(history,rules):
     """Keep the editable rules in the app, independent of data.py's old API."""
@@ -221,6 +237,21 @@ elif screen=='🎯 狙い台':
     st.subheader('当日の狙い台リスト')
     st.caption('上から優先順。変更後に保存してください。このページのURLをブックマークすると、同じリストを開けます。')
     st.caption('URLを知っている人はこのリストを開けます。URLの共有に注意してください。')
+    if 'bulk_notice' in st.session_state:st.success(st.session_state.pop('bulk_notice'))
+    with st.form('bulk_seats_form'):
+        bulk_text=st.text_area('台番号をまとめて入力',placeholder='561、562、570\n580 581 582',max_chars=3000)
+        st.caption('カンマ・読点・改行・スペースで区切れます。全角数字もOK。入力順に末尾へ追加し、重複は除きます。')
+        bulk_submit=st.form_submit_button('まとめて狙い台に追加',width='stretch')
+    if bulk_submit:
+        try:
+            additions,skipped=parse_bulk_seats(bulk_text,set(POSITIONS)|set(names),{r['台番'] for r in st.session_state.picks})
+            if additions:
+                st.session_state.picks.extend({'台番':n,'状態':'未確認','メモ':''} for n in additions)
+                st.session_state.dirty=True
+                st.session_state.bulk_notice=f'{len(additions)}台追加しました。'+(f'重複{skipped}件はスキップしました。' if skipped else '')+'下の「狙い台を保存」で保存してください。'
+                st.rerun()
+            else:st.info('入力した台はすべて登録済みです。')
+        except ValueError as exc:st.error(str(exc))
     if not st.session_state.picks:st.info('おすすめや台の詳細から、狙い台を追加できます。')
     for i,r in enumerate(st.session_state.picks):
         n=r['台番']
