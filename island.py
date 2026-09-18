@@ -53,15 +53,21 @@ def render_map(names,values,recommended=(),shortlist=(),focus=None,mode='差枚'
         if val is not None and not math.isfinite(val):val=None
         color,ink=cell_colors(val,mode)
         border='#9ca3af';bw=1
-        if seat in recommended:border='#ffc45b';bw=3
-        if seat in shortlist:border='#f277b5';bw=3
+        if seat in recommended:border='#e5a000';bw=3
+        if seat in shortlist:border='#be185d';bw=3
         if seat==focus:border='#72c9ff';bw=4
         box=(x*scale,y*scale,(x+w)*scale,(y+h)*scale)
-        d.rectangle(box,fill='#ffffff',outline=border,width=bw*scale)
+        background='#fce7f3' if seat in shortlist else '#fff8d6' if seat in recommended else '#ffffff'
+        d.rectangle(box,fill=background,outline=border,width=bw*scale)
         label=str(seat)+('★' if seat in recommended else '')+('●' if seat in shortlist else '')
-        label_font=font(8*scale)
+        header_ink='#111827'
+        if seat in recommended or seat in shortlist:
+            header_fill='#be185d' if seat in shortlist else '#fbbf24'
+            header_ink='#ffffff' if seat in shortlist else '#111827'
+            d.rectangle(((x+2)*scale,(y+2)*scale,(x+w-2)*scale,(y+13)*scale),fill=header_fill)
+        label_font=font((9 if seat in recommended or seat in shortlist else 8)*scale)
         while d.textlength(label,font=label_font)>(w-10)*scale and label_font.size>10:label_font=font(label_font.size-1)
-        d.text(((x+5)*scale,(y+3)*scale),label,font=label_font,fill='#111827')
+        d.text(((x+w/2)*scale,(y+7.5)*scale),label,font=label_font,fill=header_ink,anchor='mm')
         value='未取得' if val is None else (f'{val:+.0f}' if mode=='差枚' else f'{val:.0f}')
         if mode=='台番のみ':value=''
         if value:
@@ -83,7 +89,10 @@ def render_map(names,values,recommended=(),shortlist=(),focus=None,mode='差枚'
         legend_y=MAP_BOTTOM+16
         d.rectangle((x*scale,legend_y*scale,(x+22)*scale,(legend_y+22)*scale),fill=fill,outline='#b3434b' if mode=='差枚' and value is not None and value<0 else '#9ca3af',width=scale)
         text(x+28,legend_y-1,label,15)
-    text(12,MAP_BOTTOM+51,'★ 黄枠：おすすめ    ● 桃枠：狙い台    青枠：選択台    未取得：データ不足',20)
+    for x,fill,label,ink in [(12,'#fbbf24','★ おすすめ','#111827'),(260,'#be185d','● 自分の狙い台','#ffffff')]:
+        d.rectangle((x*scale,(MAP_BOTTOM+50)*scale,(x+232)*scale,(MAP_BOTTOM+80)*scale),fill=fill)
+        text(x+8,MAP_BOTTOM+49,label,20,ink)
+    text(520,MAP_BOTTOM+51,'青枠：選択台    未取得：データ不足',20)
     text(12,MAP_BOTTOM+85,('デモ：差枚・回転数・機種配置は架空です。' if demo else '左下40台は確認済みの補完配置。機種名は選択した最新日のデータ。'),17,'#475569')
     return im
 
