@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import quote
 import pandas as pd
 import streamlit as st
-from data import demo_history,recommendations,negative_ranking,period
+from data import demo_history,negative_ranking,period
 from storage import spreadsheet,read_history,load_shortlist,save_shortlist,validate_shortlist
 from site7 import machine_link,CONFIG,HALL_URL
 from island import POSITIONS,render_map,focus_crop,encode
@@ -49,9 +49,38 @@ def add_seat(seat):
 
 def jump_map(seat):st.session_state.pending_focus=int(seat)
 
+def recommendations_for_rules(history,rules):
+    """Keep the editable rules in the app, independent of data.py's old API."""
+    days=int(rules['days'])
+    daily_max=int(rules['daily_max'])
+    min_spins=int(rules['min_spins'])
+    if not 1<=days<=14 or not -20000<=daily_max<=20000 or not 0<=min_spins<=20000:
+        raise ValueError('おすすめ条件が範囲外です')
+    frame,dates=period(history,days)
+    if frame.empty:return frame,dates
+    matched=frame['全日あり'] & frame['最大差枚'].le(daily_max) & frame['平均回転数'].ge(min_spins)
+    return frame.loc[matched].sort_values(['差枚合計','台番']),dates
+
 HALL_ID='hyper-arrow-mihara'
-DEFAULT_RULES=json.loads((Path(__file__).parent/'recommendation_rules.json').read_text(encoding='utf-8'))[HALL_ID]
 RULE_FIELDS={'days':('判定する営業日数',1,14,1),'daily_max':('各日の差枚上限（枚）',-20000,20000,100),'min_spins':('平均回転数の下限（G）',0,20000,100)}
+DEFAULT_RULES={'days':3,'daily_max':1000,'min_spins':6000}
+rules_path=Path(__file__).parent/'recommendation_rules.json'
+if rules_path.exists():
+    try:
+        configured=json.loads(rules_path.read_text(encoding='utf-8')).get(HALL_ID,{})
+        for field,(_,lower,upper,_) in RULE_FIELDS.items():
+            value=int(configured.get(field,DEFAULT_RULES[field]))
+            if not lower<=value<=upper:raise ValueError(field)
+            DEFAULT_RULES[field]=value
+    except (ValueError,TypeError,AttributeError,OSError):
+        DEFAULT_RULES={'days':3,'daily_max':1000,'min_spins':6000}
+        st.warning('店舗の初期条件を読み込めなかったため、標準の条件を使用しています。')
+
+def reset_recommendation_rules():
+    for field in RULE_FIELDS:
+        st.session_state[f'{HALL_ID}_{field}']=DEFAULT_RULES[field]
+        st.query_params.pop(field,None)
+
 for field,(_,lower,upper,_) in RULE_FIELDS.items():
     key=f'{HALL_ID}_{field}'
     if key not in st.session_state:
@@ -65,11 +94,7 @@ with st.expander('⚙️ この店のおすすめ条件'):
     cols=st.columns(3)
     for col,(field,(label,lower,upper,step)) in zip(cols,RULE_FIELDS.items()):
         col.number_input(label,min_value=lower,max_value=upper,step=step,key=f'{HALL_ID}_{field}')
-    if st.button('この店の初期条件に戻す'):
-        for field in RULE_FIELDS:
-            st.session_state[f'{HALL_ID}_{field}']=DEFAULT_RULES[field]
-            st.query_params.pop(field,None)
-        st.rerun()
+    st.button('この店の初期条件に戻す',on_click=reset_recommendation_rules)
 rules={field:int(st.session_state[f'{HALL_ID}_{field}']) for field in RULE_FIELDS}
 for field,value in rules.items():
     if value==DEFAULT_RULES[field]:st.query_params.pop(field,None)
@@ -111,7 +136,9 @@ if notes:
     with st.expander(f'データ確認のお知らせ {len(notes)}件'):st.write('\n\n'.join(notes[:100]))
 unknown=sorted(set(latest['台番'])-set(POSITIONS))
 if unknown:st.warning('島図に座標のない台：'+', '.join(map(str,unknown)))
-names=dict(zip(latest['台番'],latest['機種名']));recommended,rec_dates=recommendations(history,rules);rec_seats=set(recommended.get('台番',[]))
+names=dict(zip(latest['台番'],latest['機種名']))
+recommended,rec_dates=recommendations_for_rules(history,rules)
+rec_seats=set(recommended.get('台番',[]))
 
 # A private random bookmark identifies one shortlist. No shared global shortlist.
 if 'token' not in st.session_state:
