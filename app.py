@@ -52,11 +52,31 @@ def group_filter(frame,group):
     mask=frame['機種名'].str.contains('ジャグラー',na=False)
     return frame if group=='全機種' else frame[mask if group=='ジャグラー' else ~mask]
 
+def autosave_picks():
+    if not st.session_state.get('dirty') or demo:return
+    try:
+        save_shortlist(book,st.session_state.token,st.session_state.picks)
+    except Exception:
+        st.session_state.picks_save_error=True
+        return
+    st.session_state.dirty=False
+    st.session_state.picks_save_error=False
+    st.session_state.picks_saved_at=datetime.now(ZoneInfo('Asia/Tokyo')).strftime('%H:%M:%S')
+
+def clear_all_picks():
+    st.session_state.picks=[]
+    st.session_state.dirty=True
+    st.session_state.pop('motion_added',None)
+    for key in list(st.session_state):
+        if key.startswith(('status_','note_')):del st.session_state[key]
+    autosave_picks()
+
 def add_seat(seat):
     if any(r['台番']==seat for r in st.session_state.picks):st.toast('登録済みやで');return
     if len(st.session_state.picks)>=100:st.warning('狙い台は100台までです');return
     st.session_state.picks.append({'台番':int(seat),'状態':'未確認','メモ':''});st.session_state.dirty=True;st.toast(f'{seat}番台を狙い台に追加')
     st.session_state.motion_added=[int(seat)]
+    autosave_picks()
 
 
 def compass_map_html(image_bytes):
@@ -230,6 +250,7 @@ def detail(seat):
     st.dataframe(df,hide_index=True,width='stretch')
     c=st.columns(2)
     if c[0].button('＋ 狙い台に追加',width='stretch'):add_seat(seat)
+    if st.session_state.get('picks_save_error'):st.error('自動保存できませんでした。変更は画面内に残っています。狙い台画面から再保存してください。')
     if c[1].button('🗺 島図で位置を見る',width='stretch'):jump_map(seat);close_detail();st.rerun()
     url,direct=machine_link(name,seat)
     if demo and seat not in {m['example_seat'] for m in CONFIG['machines']}:url,direct=HALL_URL,False
@@ -263,7 +284,7 @@ if 'pending_focus' in st.session_state:
 
 screen=st.radio('画面',['✨ おすすめ','🎯 狙い台','🗺 島図','📋 全台'],key='screen',horizontal=True,label_visibility='collapsed')
 motion_added=set(st.session_state.pop('motion_added',[]))
-if st.session_state.dirty:st.caption('狙い台に未保存の変更があります。「狙い台」画面から保存できます。')
+save_status=st.empty()
 
 if screen=='✨ おすすめ':
     group=st.segmented_control('機種タイプ',['全機種','ジャグラー','ジャグラー以外'],default='全機種',selection_mode='single') or '全機種'
@@ -284,8 +305,11 @@ if screen=='✨ おすすめ':
 
 elif screen=='🎯 狙い台':
     st.subheader('当日の狙い台リスト')
-    st.caption('上から優先順。変更後に保存してください。このページのURLをブックマークすると、同じリストを開けます。')
+    st.caption('上から優先順。追加・削除・並べ替え・状態・メモの変更は自動保存します。メモは入力後にEnterか欄の外を押すと確定します。同じリストを開くには、このページのURLをブックマークしてください。')
     st.caption('URLを知っている人はこのリストを開けます。URLの共有に注意してください。')
+    with st.popover('狙い台を全削除',disabled=not st.session_state.picks):
+        st.warning(f'このリストの狙い台{len(st.session_state.picks)}台と、その状態・メモをすべて削除します。')
+        st.button('全削除を確定する',key='confirm_clear_picks',type='primary',on_click=clear_all_picks,disabled=not st.session_state.picks)
     if 'bulk_notice' in st.session_state:st.success(st.session_state.pop('bulk_notice'))
     with st.form('bulk_seats_form'):
         bulk_text=st.text_area('台番号をまとめて入力',placeholder='561、562、570\n580 581 582',max_chars=3000)
@@ -297,7 +321,8 @@ elif screen=='🎯 狙い台':
             if additions:
                 st.session_state.picks.extend({'台番':n,'状態':'未確認','メモ':''} for n in additions)
                 st.session_state.dirty=True
-                st.session_state.bulk_notice=f'{len(additions)}台追加しました。'+(f'重複{skipped}件はスキップしました。' if skipped else '')+'下の「狙い台を保存」で保存してください。'
+                st.session_state.bulk_notice=f'{len(additions)}台追加しました。'+(f'重複{skipped}件はスキップしました。' if skipped else '')
+                autosave_picks()
                 st.rerun()
             else:st.info('入力した台はすべて登録済みです。')
         except ValueError as exc:st.error(str(exc))
@@ -312,14 +337,16 @@ elif screen=='🎯 狙い台':
             c=st.columns(4)
             if c[0].button('詳細',key=f'pick_detail_{n}',width='stretch'):open_detail(n)
             if c[1].button('↑',key=f'up_{n}',disabled=i==0,width='stretch'):
-                st.session_state.picks[i-1],st.session_state.picks[i]=st.session_state.picks[i],st.session_state.picks[i-1];st.session_state.dirty=True;st.rerun()
+                st.session_state.picks[i-1],st.session_state.picks[i]=st.session_state.picks[i],st.session_state.picks[i-1];st.session_state.dirty=True;autosave_picks();st.rerun()
             if c[2].button('↓',key=f'down_{n}',disabled=i==len(st.session_state.picks)-1,width='stretch'):
-                st.session_state.picks[i+1],st.session_state.picks[i]=st.session_state.picks[i],st.session_state.picks[i+1];st.session_state.dirty=True;st.rerun()
-            if c[3].button('削除',key=f'del_{n}',width='stretch'):st.session_state.picks.pop(i);st.session_state.dirty=True;st.rerun()
-    if st.button('狙い台を保存',type='primary',width='stretch',disabled=demo):
-        try:save_shortlist(book,st.session_state.token,st.session_state.picks);st.session_state.dirty=False;st.success('保存しました')
-        except Exception:st.error('保存できませんでした。JSONバックアップをダウンロードしてから再試行してください。')
-    if demo:st.caption('デモ中はJSONバックアップで保存できます。')
+                st.session_state.picks[i+1],st.session_state.picks[i]=st.session_state.picks[i],st.session_state.picks[i+1];st.session_state.dirty=True;autosave_picks();st.rerun()
+            if c[3].button('削除',key=f'del_{n}',width='stretch'):
+                st.session_state.picks.pop(i);st.session_state.dirty=True
+                st.session_state.pop(f'status_{n}',None);st.session_state.pop(f'note_{n}',None)
+                autosave_picks();st.rerun()
+    if st.button('狙い台を再保存',width='stretch',disabled=demo):
+        st.session_state.dirty=True
+    if demo:st.caption('デモ中は自動保存できません。JSONバックアップで保存できます。')
     st.download_button('JSONバックアップ',json.dumps(st.session_state.picks,ensure_ascii=False,indent=2),'mihara_shortlist.json','application/json')
     with st.expander('バックアップから復元'):
         up=st.file_uploader('JSONファイル',type='json')
@@ -329,6 +356,7 @@ elif screen=='🎯 狙い台':
                 st.session_state.picks=validate_shortlist(json.load(up));st.session_state.dirty=True
                 for k in list(st.session_state):
                     if k.startswith(('status_','note_')):del st.session_state[k]
+                autosave_picks()
                 st.rerun()
             except (ValueError,TypeError,KeyError):st.error('バックアップの形式が違います。')
 
@@ -376,3 +404,11 @@ else:
 
 if st.session_state.get('detail_seat') is not None:
     detail(st.session_state.detail_seat)
+
+autosave_picks()
+if demo:
+    save_status.caption('デモ表示：狙い台の変更はこの画面内のみ。自動保存は実データ接続後に有効になります。')
+elif st.session_state.get('picks_save_error'):
+    save_status.error('自動保存に失敗しました。変更は画面内に残っています。「狙い台を再保存」で再試行できます。保存できるまではページを閉じないでください。')
+elif st.session_state.get('picks_saved_at'):
+    save_status.caption('✓ 狙い台を自動保存しました　'+st.session_state.picks_saved_at)
