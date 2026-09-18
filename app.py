@@ -11,11 +11,11 @@ from site7 import machine_link,CONFIG,HALL_URL
 from island import POSITIONS,render_map,focus_crop,encode
 st.set_page_config(page_title='SLOTDASH | HYPER ARROW 美原',page_icon='🎰',layout='wide')
 st.markdown('''<style>
-.block-container{max-width:1320px;padding-top:1.6rem;padding-bottom:4rem}
+.block-container{max-width:1320px;padding-top:4.5rem;padding-bottom:4rem}
 h1{font-size:2rem!important;letter-spacing:.08em}h2{font-size:1.35rem!important}
 [data-testid="stMetricValue"]{font-size:1.7rem}[data-testid="stMetric"]{background:#141e32;border:1px solid #28344b;border-radius:12px;padding:12px}
 [data-testid="stCaptionContainer"]{color:#aab9d2}button{min-height:42px}.tag{color:#ffcd72;font-size:.82rem}.seat{font-size:1.55rem;font-weight:750;color:#e9f1ff}.muted{color:#aab9d2;font-size:.85rem}
-@media(max-width:640px){.block-container{padding:1rem .8rem}h1{font-size:1.6rem!important}}
+@media(max-width:640px){.block-container{padding:4.5rem .8rem 4rem}h1{font-size:1.6rem!important}}
 </style>''',unsafe_allow_html=True)
 
 def config():
@@ -127,31 +127,6 @@ if f'{HALL_ID}_rank_days' not in st.session_state:
     raw=st.query_params.get('rank_days','1')
     st.session_state[f'{HALL_ID}_rank_days']=int(raw) if raw in ('1','3','7') else 1
 
-with st.expander('⚙️ この店のおすすめ条件'):
-    st.caption('設定はこのページのURLに残ります。URLをブックマークすると次回も同じ条件で開けます。')
-    method=st.selectbox('おすすめの選び方',['negative_top10','conditions'],format_func=lambda x:'マイナス差枚 上位10台（アロー）' if x=='negative_top10' else '差枚と回転数の条件で選ぶ',key=f'{HALL_ID}_method')
-    if method=='negative_top10':
-        st.selectbox('おすすめの集計期間',[1,3,7],format_func=lambda x:'基準日の1日分（通常は前日）' if x==1 else f'直近{x}営業日の合計',key=f'{HALL_ID}_rank_days')
-        st.caption('回転数に関係なく、マイナス差枚が大きい順に最大10台。0枚・プラス・差枚未取得の台は除外します。同枚数は台番号順です。')
-    else:
-        cols=st.columns(3)
-        for col,(field,(label,lower,upper,step)) in zip(cols,RULE_FIELDS.items()):
-            col.number_input(label,min_value=lower,max_value=upper,step=step,key=f'{HALL_ID}_{field}')
-    st.button('この店の初期条件に戻す',on_click=reset_recommendation_rules)
-rules={field:int(st.session_state[f'{HALL_ID}_{field}']) for field in RULE_FIELDS}
-for field,value in rules.items():
-    if value==DEFAULT_RULES[field]:st.query_params.pop(field,None)
-    else:st.query_params[field]=str(value)
-rule_description=f"{rules['days']}営業日すべて差枚＋{rules['daily_max']:,}枚以下、平均{rules['min_spins']:,}G以上".replace('＋-','−')
-rules['method']=method
-if method=='negative_top10':
-    rules['days']=st.session_state[f'{HALL_ID}_rank_days']
-    rule_description=('基準日の差枚' if rules['days']==1 else f"直近{rules['days']}営業日の合計差枚")+'がマイナスの台から、凹みが大きい順に上位10台（回転数不問）'
-    st.query_params.pop('recommendation',None)
-    st.query_params['rank_days']=str(rules['days'])
-else:
-    st.query_params['recommendation']='conditions'
-
 st.title('SLOTDASH')
 st.caption('HYPER ARROW 美原  •  狙う台を、ひと目で。')
 sheet,credentials=config();demo=not (sheet and credentials)
@@ -187,6 +162,31 @@ if notes:
     with st.expander(f'データ確認のお知らせ {len(notes)}件'):st.write('\n\n'.join(notes[:100]))
 unknown=sorted(set(latest['台番'])-set(POSITIONS))
 if unknown:st.warning('島図に座標のない台：'+', '.join(map(str,unknown)))
+with st.expander('⚙️ この店のおすすめ条件'):
+    st.caption('設定はこのページのURLに残ります。URLをブックマークすると次回も同じ条件で開けます。')
+    method=st.selectbox('おすすめの選び方',['negative_top10','conditions'],format_func=lambda x:'マイナス差枚 上位10台（アロー）' if x=='negative_top10' else '差枚と回転数の条件で選ぶ',key=f'{HALL_ID}_method')
+    if method=='negative_top10':
+        st.selectbox('おすすめの集計期間',[1,3,7],format_func=lambda x:'基準日の1日分（通常は前日）' if x==1 else f'直近{x}営業日の合計',key=f'{HALL_ID}_rank_days')
+        st.caption('回転数に関係なく、マイナス差枚が大きい順に最大10台。0枚・プラス・差枚未取得の台は除外します。同枚数は台番号順です。')
+    else:
+        cols=st.columns(3)
+        for col,(field,(label,lower,upper,step)) in zip(cols,RULE_FIELDS.items()):
+            col.number_input(label,min_value=lower,max_value=upper,step=step,key=f'{HALL_ID}_{field}')
+    st.button('この店の初期条件に戻す',on_click=reset_recommendation_rules)
+rules={field:int(st.session_state[f'{HALL_ID}_{field}']) for field in RULE_FIELDS}
+for field,value in rules.items():
+    if value==DEFAULT_RULES[field]:st.query_params.pop(field,None)
+    else:st.query_params[field]=str(value)
+rule_description=f"{rules['days']}営業日すべて差枚＋{rules['daily_max']:,}枚以下、平均{rules['min_spins']:,}G以上".replace('＋-','−')
+rules['method']=method
+if method=='negative_top10':
+    rules['days']=st.session_state[f'{HALL_ID}_rank_days']
+    rule_description=('基準日の差枚' if rules['days']==1 else f"直近{rules['days']}営業日の合計差枚")+'がマイナスの台から、凹みが大きい順に上位10台（回転数不問）'
+    st.query_params.pop('recommendation',None)
+    st.query_params['rank_days']=str(rules['days'])
+else:
+    st.query_params['recommendation']='conditions'
+
 names=dict(zip(latest['台番'],latest['機種名']))
 recommended,rec_dates=recommendations_for_rules(history,rules)
 rec_seats=set(recommended.get('台番',[]))
