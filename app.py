@@ -74,6 +74,12 @@ def parse_bulk_seats(text,valid_seats,existing_seats):
 def recommendations_for_rules(history,rules):
     """Keep the editable rules in the app, independent of data.py's old API."""
     days=int(rules['days'])
+    if rules.get('method')=='negative_top10':
+        if days not in (1,3,7):raise ValueError('集計期間が範囲外です')
+        frame,dates=period(history,days)
+        if frame.empty:return frame,dates
+        matched=frame['全日あり'] & frame['差枚合計'].lt(0)
+        return frame.loc[matched].sort_values(['差枚合計','台番']).head(10),dates
     daily_max=int(rules['daily_max'])
     min_spins=int(rules['min_spins'])
     if not 1<=days<=14 or not -20000<=daily_max<=20000 or not 0<=min_spins<=20000:
@@ -102,6 +108,10 @@ def reset_recommendation_rules():
     for field in RULE_FIELDS:
         st.session_state[f'{HALL_ID}_{field}']=DEFAULT_RULES[field]
         st.query_params.pop(field,None)
+    st.session_state[f'{HALL_ID}_method']='negative_top10'
+    st.session_state[f'{HALL_ID}_rank_days']=1
+    st.query_params.pop('recommendation',None)
+    st.query_params.pop('rank_days',None)
 
 for field,(_,lower,upper,_) in RULE_FIELDS.items():
     key=f'{HALL_ID}_{field}'
@@ -111,17 +121,36 @@ for field,(_,lower,upper,_) in RULE_FIELDS.items():
         except (TypeError,ValueError):value=DEFAULT_RULES[field]
         st.session_state[key]=value if lower<=value<=upper else DEFAULT_RULES[field]
 
+if f'{HALL_ID}_method' not in st.session_state:
+    st.session_state[f'{HALL_ID}_method']='conditions' if st.query_params.get('recommendation')=='conditions' else 'negative_top10'
+if f'{HALL_ID}_rank_days' not in st.session_state:
+    raw=st.query_params.get('rank_days','1')
+    st.session_state[f'{HALL_ID}_rank_days']=int(raw) if raw in ('1','3','7') else 1
+
 with st.expander('⚙️ この店のおすすめ条件'):
     st.caption('設定はこのページのURLに残ります。URLをブックマークすると次回も同じ条件で開けます。')
-    cols=st.columns(3)
-    for col,(field,(label,lower,upper,step)) in zip(cols,RULE_FIELDS.items()):
-        col.number_input(label,min_value=lower,max_value=upper,step=step,key=f'{HALL_ID}_{field}')
+    method=st.selectbox('おすすめの選び方',['negative_top10','conditions'],format_func=lambda x:'マイナス差枚 上位10台（アロー）' if x=='negative_top10' else '差枚と回転数の条件で選ぶ',key=f'{HALL_ID}_method')
+    if method=='negative_top10':
+        st.selectbox('おすすめの集計期間',[1,3,7],format_func=lambda x:'基準日の1日分（通常は前日）' if x==1 else f'直近{x}営業日の合計',key=f'{HALL_ID}_rank_days')
+        st.caption('回転数に関係なく、マイナス差枚が大きい順に最大10台。0枚・プラス・差枚未取得の台は除外します。同枚数は台番号順です。')
+    else:
+        cols=st.columns(3)
+        for col,(field,(label,lower,upper,step)) in zip(cols,RULE_FIELDS.items()):
+            col.number_input(label,min_value=lower,max_value=upper,step=step,key=f'{HALL_ID}_{field}')
     st.button('この店の初期条件に戻す',on_click=reset_recommendation_rules)
 rules={field:int(st.session_state[f'{HALL_ID}_{field}']) for field in RULE_FIELDS}
 for field,value in rules.items():
     if value==DEFAULT_RULES[field]:st.query_params.pop(field,None)
     else:st.query_params[field]=str(value)
 rule_description=f"{rules['days']}営業日すべて差枚＋{rules['daily_max']:,}枚以下、平均{rules['min_spins']:,}G以上".replace('＋-','−')
+rules['method']=method
+if method=='negative_top10':
+    rules['days']=st.session_state[f'{HALL_ID}_rank_days']
+    rule_description=('基準日の差枚' if rules['days']==1 else f"直近{rules['days']}営業日の合計差枚")+'がマイナスの台から、凹みが大きい順に上位10台（回転数不問）'
+    st.query_params.pop('recommendation',None)
+    st.query_params['rank_days']=str(rules['days'])
+else:
+    st.query_params['recommendation']='conditions'
 
 st.title('SLOTDASH')
 st.caption('HYPER ARROW 美原  •  狙う台を、ひと目で。')
@@ -226,7 +255,7 @@ if screen=='✨ おすすめ':
     group=st.segmented_control('機種タイプ',['全機種','ジャグラー','ジャグラー以外'],default='全機種',selection_mode='single') or '全機種'
     rec=group_filter(recommended,group)
     c=st.columns(3);c[0].metric('おすすめ',f'{len(rec)}台');c[1].metric('狙い台',f'{len(st.session_state.picks)}台');c[2].metric('最新日の平均差枚',fmt(latest['差枚'].mean(),True,'枚'))
-    st.subheader('高回転 × 出ていない台')
+    st.subheader('マイナス差枚 上位10台' if rules['method']=='negative_top10' else '高回転 × 出ていない台')
     st.caption(rule_description+'。差枚合計が低い順。')
     st.caption('対象日：'+' / '.join(rec_dates))
     if len(rec_dates)<rules['days']:st.info(f"おすすめの判定には{rules['days']}営業日分のデータが必要です。")
