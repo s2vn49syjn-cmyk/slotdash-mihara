@@ -55,10 +55,16 @@ def period(history,n):
     result['全日あり']=complete & (len(dates)==n)
     return result.reset_index(),dates
 
-def recommendations(history):
-    p,dates=period(history,3)
+def recommendations(history,rules=None):
+    rules=rules or {}
+    days=int(rules.get('days',3))
+    daily_max=int(rules.get('daily_max',1000))
+    min_spins=int(rules.get('min_spins',6000))
+    if not 1<=days<=14 or not -20000<=daily_max<=20000 or not 0<=min_spins<=20000:
+        raise ValueError('おすすめ条件が範囲外です')
+    p,dates=period(history,days)
     if p.empty:return p,dates
-    return p[p['全日あり'] & p['最大差枚'].le(1000) & p['平均回転数'].ge(6000)].sort_values(['差枚合計','台番']),dates
+    return p[p['全日あり'] & p['最大差枚'].le(daily_max) & p['平均回転数'].ge(min_spins)].sort_values(['差枚合計','台番']),dates
 
 def negative_ranking(history,n):
     p,dates=period(history,n)

@@ -1,6 +1,7 @@
 from datetime import datetime,timedelta
 from zoneinfo import ZoneInfo
 import html,json,os,re,uuid
+from pathlib import Path
 from urllib.parse import quote
 import pandas as pd
 import streamlit as st
@@ -48,6 +49,33 @@ def add_seat(seat):
 
 def jump_map(seat):st.session_state.pending_focus=int(seat)
 
+HALL_ID='hyper-arrow-mihara'
+DEFAULT_RULES=json.loads((Path(__file__).parent/'recommendation_rules.json').read_text(encoding='utf-8'))[HALL_ID]
+RULE_FIELDS={'days':('判定する営業日数',1,14,1),'daily_max':('各日の差枚上限（枚）',-20000,20000,100),'min_spins':('平均回転数の下限（G）',0,20000,100)}
+for field,(_,lower,upper,_) in RULE_FIELDS.items():
+    key=f'{HALL_ID}_{field}'
+    if key not in st.session_state:
+        raw=st.query_params.get(field,'')
+        try:value=int(raw)
+        except (TypeError,ValueError):value=DEFAULT_RULES[field]
+        st.session_state[key]=value if lower<=value<=upper else DEFAULT_RULES[field]
+
+with st.expander('⚙️ この店のおすすめ条件'):
+    st.caption('設定はこのページのURLに残ります。URLをブックマークすると次回も同じ条件で開けます。')
+    cols=st.columns(3)
+    for col,(field,(label,lower,upper,step)) in zip(cols,RULE_FIELDS.items()):
+        col.number_input(label,min_value=lower,max_value=upper,step=step,key=f'{HALL_ID}_{field}')
+    if st.button('この店の初期条件に戻す'):
+        for field in RULE_FIELDS:
+            st.session_state[f'{HALL_ID}_{field}']=DEFAULT_RULES[field]
+            st.query_params.pop(field,None)
+        st.rerun()
+rules={field:int(st.session_state[f'{HALL_ID}_{field}']) for field in RULE_FIELDS}
+for field,value in rules.items():
+    if value==DEFAULT_RULES[field]:st.query_params.pop(field,None)
+    else:st.query_params[field]=str(value)
+rule_description=f"{rules['days']}営業日すべて差枚＋{rules['daily_max']:,}枚以下、平均{rules['min_spins']:,}G以上".replace('＋-','−')
+
 st.title('SLOTDASH')
 st.caption('HYPER ARROW 美原  •  狙う台を、ひと目で。')
 sheet,credentials=config();demo=not (sheet and credentials)
@@ -83,7 +111,7 @@ if notes:
     with st.expander(f'データ確認のお知らせ {len(notes)}件'):st.write('\n\n'.join(notes[:100]))
 unknown=sorted(set(latest['台番'])-set(POSITIONS))
 if unknown:st.warning('島図に座標のない台：'+', '.join(map(str,unknown)))
-names=dict(zip(latest['台番'],latest['機種名']));recommended,rec_dates=recommendations(history);rec_seats=set(recommended.get('台番',[]))
+names=dict(zip(latest['台番'],latest['機種名']));recommended,rec_dates=recommendations(history,rules);rec_seats=set(recommended.get('台番',[]))
 
 # A private random bookmark identifies one shortlist. No shared global shortlist.
 if 'token' not in st.session_state:
@@ -103,7 +131,7 @@ def close_detail():st.session_state.detail_seat=None
 def detail(seat):
     name=names.get(seat,'この日の機種データなし')
     st.subheader(f'{seat}番台  {name}')
-    if seat in rec_seats:st.success('おすすめ条件に該当：3日とも＋1,000枚以下・平均6,000G以上')
+    if seat in rec_seats:st.success('おすすめ条件に該当：'+rule_description)
     rows=[]
     for date in dates:
         f=history[date];r=f[f['台番']==seat]
@@ -150,9 +178,9 @@ if screen=='✨ おすすめ':
     rec=group_filter(recommended,group)
     c=st.columns(3);c[0].metric('おすすめ',f'{len(rec)}台');c[1].metric('狙い台',f'{len(st.session_state.picks)}台');c[2].metric('最新日の平均差枚',fmt(latest['差枚'].mean(),True,'枚'))
     st.subheader('高回転 × 出ていない台')
-    st.caption('3日とも＋1,000枚以下、3日平均6,000G以上。差枚合計が低い順。')
+    st.caption(rule_description+'。差枚合計が低い順。')
     st.caption('対象日：'+' / '.join(rec_dates))
-    if len(rec_dates)<3:st.info('おすすめの判定には3営業日分のデータが必要です。')
+    if len(rec_dates)<rules['days']:st.info(f"おすすめの判定には{rules['days']}営業日分のデータが必要です。")
     card_list(rec,'rec')
     st.divider();st.subheader('マイナス差枚ランキング')
     n=st.radio('集計期間',[3,7],format_func=lambda x:f'直近{x}日',horizontal=True)
@@ -216,7 +244,7 @@ elif screen=='🗺 島図':
         if st.button(f'{focus}番台の詳細を開く',width='stretch'):open_detail(focus)
         with st.expander('全体の島図'):st.image(im,width='stretch')
     else:st.image(im,width='stretch')
-    st.caption('黄枠★＝おすすめ（常に3日条件）／桃枠●＝狙い台／青枠＝選択台。台番号を選ぶと周辺を拡大。')
+    st.caption('黄枠★＝おすすめ（'+rule_description+'）／桃枠●＝狙い台／青枠＝選択台。台番号を選ぶと周辺を拡大。')
     st.caption('数値の対象日：'+' / '.join(used_dates))
     a,b=st.columns(2)
     a.download_button('島図をPNG保存',encode(im),f'mihara_{anchor}.png','image/png',width='stretch')
